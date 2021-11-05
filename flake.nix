@@ -25,7 +25,7 @@
       config = import ./nix/config.nix lib customConfig;
       cardanoWalletLib = import ./nix/util.nix { inherit lib; };
       inherit (flake-utils.lib) eachSystem mkApp flattenTree;
-      inherit (iohkNix.lib) prefixNamesWith;
+      inherit (iohkNix.lib) evalService;
       supportedSystems = import ./nix/supported-systems.nix;
       defaultSystem = lib.head supportedSystems;
       overlay = final: prev:
@@ -33,6 +33,13 @@
           cardanoWalletHaskellProject = self.legacyPackages.${final.system};
           inherit (final.cardanoWalletHaskellProject.hsPkgs.cardano-wallet.components.exes) cardano-wallet;
         };
+      nixosModule = { pkgs, lib, ... }: {
+        imports = [ ./nix/nixos/cardano-wallet-service.nix ];
+        services.cardano-node.project = lib.mkDefault self.legacyPackages.${pkgs.system};
+      };
+      nixosModules = {
+        cardano-wallet = nixosModule;
+      };
       # Which exes should be put in the release archives.
       releaseContents = jobs: map (exe: jobs.${exe}) [
         "cardano-wallet"
@@ -152,7 +159,12 @@
                 checks = collectChecks isProjectPackage project.hsPkgs;
                 # `benchmarks` are only built, not run.
                 benchmarks = collectComponents "benchmarks" isProjectPackage project.hsPkgs;
-              });
+              }) //
+              # nix run .#<network>/wallet
+              (flattenTree (import ./nix/scripts.nix {
+                inherit project evalService;
+                customConfigs = [ config ];
+              }));
               in self;
 
             # See the imported file for how to use the docker build.
@@ -277,7 +289,7 @@
               dockerImage = mkDockerImage packages;
             };
 
-            apps = lib.mapAttrs (n: p: { type = "app"; program = if (p ? exePath) then p.exePath else "${p}/bin/${n}"; }) packages;
+            apps = lib.mapAttrs (n: p: { type = "app"; program = p.exePath or "${p}/bin/${p.name or n}"; }) packages;
 
             devShell = project.shell;
 
@@ -289,7 +301,7 @@
     in
     lib.recursiveUpdate (removeAttrs systems [ "systemHydraJobs" ])
       {
-        inherit overlay;
+        inherit overlay nixosModule nixosModules;
         hydraJobs = lib.foldl' lib.mergeAttrs { } (lib.attrValues systems.systemHydraJobs) // {
           inherit required;
         };
