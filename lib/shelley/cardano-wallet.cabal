@@ -218,6 +218,10 @@ test-suite unit
     , cardano-wallet-core
     , cardano-wallet-launcher
     , cardano-wallet-test-utils
+    , cardano-ledger-shelley-ma
+    , cardano-ledger-alonzo
+    , pretty-simple
+    , strict-containers
     , containers
     , contra-tracer
     , directory
@@ -226,6 +230,7 @@ test-suite unit
     , generic-lens
     , hspec-core
     , iohk-monitoring
+    , time
     , hspec
     , hspec-core
     , memory
