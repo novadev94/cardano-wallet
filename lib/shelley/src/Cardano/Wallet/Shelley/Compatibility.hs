@@ -196,7 +196,8 @@ import Cardano.Wallet.Byron.Compatibility
 import Cardano.Wallet.Primitive.AddressDerivation
     ( NetworkDiscriminant (..) )
 import Cardano.Wallet.Primitive.Types
-    ( ChainPoint (..)
+    ( Certificates
+    , ChainPoint (..)
     , MinimumUTxOValue (..)
     , PoolCertificate (..)
     , PoolRegistrationCertificate (..)
@@ -245,7 +246,7 @@ import Data.Foldable
 import Data.Function
     ( (&) )
 import Data.List
-    ( unzip5 )
+    ( unzip6 )
 import Data.Map.Strict
     ( Map )
 import Data.Maybe
@@ -498,7 +499,7 @@ fromShelleyBlock
     -> (W.Block, [W.PoolCertificate])
 fromShelleyBlock gp blk@(ShelleyBlock (SL.Block _ (SL.TxSeq txs')) _) =
     let
-       (txs, dlgCerts, poolCerts, _, _) = unzip5 $ map fromShelleyTx $ toList txs'
+       (txs, dlgCerts, poolCerts, _, _, _) = unzip6 $ map fromShelleyTx $ toList txs'
     in
         ( W.Block
             { header = toShelleyBlockHeader (W.getGenesisBlockHash gp) blk
@@ -514,7 +515,7 @@ fromAllegraBlock
     -> (W.Block, [W.PoolCertificate])
 fromAllegraBlock gp blk@(ShelleyBlock (SL.Block _ (SL.TxSeq txs')) _) =
     let
-       (txs, dlgCerts, poolCerts, _, _) = unzip5 $ map fromAllegraTx $ toList txs'
+       (txs, dlgCerts, poolCerts, _, _, _) = unzip6 $ map fromAllegraTx $ toList txs'
     in
         ( W.Block
             { header = toShelleyBlockHeader (W.getGenesisBlockHash gp) blk
@@ -530,7 +531,7 @@ fromMaryBlock
     -> (W.Block, [W.PoolCertificate])
 fromMaryBlock gp blk@(ShelleyBlock (SL.Block _ (SL.TxSeq txs')) _) =
     let
-       (txs, dlgCerts, poolCerts, _, _) = unzip5 $ map fromMaryTx $ toList txs'
+       (txs, dlgCerts, poolCerts, _, _, _) = unzip6 $ map fromMaryTx $ toList txs'
     in
         ( W.Block
             { header = toShelleyBlockHeader (W.getGenesisBlockHash gp) blk
@@ -554,7 +555,7 @@ fromAlonzoBlock
 fromAlonzoBlock gp blk@(ShelleyBlock (SL.Block _ txSeq) _) =
     let
         Alonzo.TxSeq txs' = txSeq
-        (txs, dlgCerts, poolCerts, _, _) = unzip5 $ map fromAlonzoValidatedTx $ toList txs'
+        (txs, dlgCerts, poolCerts, _, _, _) = unzip6 $ map fromAlonzoValidatedTx $ toList txs'
     in
         ( W.Block
             { header = toShelleyBlockHeader (W.getGenesisBlockHash gp) blk
@@ -1285,16 +1286,16 @@ toShelleyCoin (W.Coin c) = SL.Coin $ safeCast c
     safeCast :: Word64 -> Integer
     safeCast = fromIntegral
 
-fromCardanoTx :: Cardano.Tx era -> (W.Tx, TokenMap, TokenMap)
+fromCardanoTx :: Cardano.Tx era -> (W.Tx, TokenMap, TokenMap, Certificates)
 fromCardanoTx = \case
     Cardano.ShelleyTx era tx -> case era of
         Cardano.ShelleyBasedEraShelley -> extract $ fromShelleyTx tx
         Cardano.ShelleyBasedEraAllegra -> extract $ fromAllegraTx tx
         Cardano.ShelleyBasedEraMary    -> extract $ fromMaryTx tx
         Cardano.ShelleyBasedEraAlonzo  -> extract $ fromAlonzoTx tx
-    Cardano.ByronTx tx                 -> (fromTxAux tx, mempty, mempty)
+    Cardano.ByronTx tx                 -> (fromTxAux tx, mempty, mempty, ([],[],[]))
   where
-    extract (a,_b,_c,d,e) = (a,d,e)
+    extract (a, b1, b2, b3, c,d) = (a,c,d, (b1,b2,b3))
 
 -- NOTE: For resolved inputs we have to pass in a dummy value of 0.
 fromShelleyTx
@@ -1302,6 +1303,7 @@ fromShelleyTx
     -> ( W.Tx
        , [W.DelegationCertificate]
        , [W.PoolCertificate]
+       , [W.NonWalletCertificate]
        , TokenMap
        , TokenMap
        )
@@ -1326,6 +1328,7 @@ fromShelleyTx tx =
         }
     , mapMaybe fromShelleyDelegationCert (toList certs)
     , mapMaybe fromShelleyRegistrationCert (toList certs)
+    , mapMaybe fromShelleyOtherCert (toList certs)
     , mempty
     , mempty
     )
@@ -1337,6 +1340,7 @@ fromAllegraTx
     -> ( W.Tx
        , [W.DelegationCertificate]
        , [W.PoolCertificate]
+       , [W.NonWalletCertificate]
        , TokenMap
        , TokenMap
        )
@@ -1362,6 +1366,7 @@ fromAllegraTx tx =
         }
     , mapMaybe fromShelleyDelegationCert (toList certs)
     , mapMaybe fromShelleyRegistrationCert (toList certs)
+    , mapMaybe fromShelleyOtherCert (toList certs)
     , mempty
     , mempty
     )
@@ -1378,6 +1383,7 @@ fromMaryTx
     -> ( W.Tx
        , [W.DelegationCertificate]
        , [W.PoolCertificate]
+       , [W.NonWalletCertificate]
        , TokenMap
        , TokenMap
        )
@@ -1402,6 +1408,7 @@ fromMaryTx tx =
         }
     , mapMaybe fromShelleyDelegationCert (toList certs)
     , mapMaybe fromShelleyRegistrationCert (toList certs)
+    , mapMaybe fromShelleyOtherCert (toList certs)
     , assetsToMint
     , assetsToBurn
     )
@@ -1428,6 +1435,7 @@ fromAlonzoTxBodyAndAux
     -> ( W.Tx
        , [W.DelegationCertificate]
        , [W.PoolCertificate]
+       , [W.NonWalletCertificate]
        , TokenMap
        , TokenMap
        )
@@ -1452,6 +1460,7 @@ fromAlonzoTxBodyAndAux bod mad =
         }
     , mapMaybe fromShelleyDelegationCert (toList certs)
     , mapMaybe fromShelleyRegistrationCert (toList certs)
+    , mapMaybe fromShelleyOtherCert (toList certs)
     , assetsToMint
     , assetsToBurn
     )
@@ -1487,6 +1496,7 @@ fromAlonzoValidatedTx
     -> ( W.Tx
        , [W.DelegationCertificate]
        , [W.PoolCertificate]
+       , [W.NonWalletCertificate]
        , TokenMap
        , TokenMap
        )
@@ -1498,11 +1508,12 @@ fromAlonzoTx
     -> ( W.Tx
        , [W.DelegationCertificate]
        , [W.PoolCertificate]
+       , [W.NonWalletCertificate]
        , TokenMap
        , TokenMap
        )
 fromAlonzoTx (Alonzo.ValidatedTx bod _wits (Alonzo.IsValid isValid) aux) =
-    (\(tx, d, p, m, b) -> (tx { W.scriptValidity = validity }, d, p, m, b))
+    (\(tx, d, p, c, m, b) -> (tx { W.scriptValidity = validity }, d, p, c, m, b))
     $ fromAlonzoTxBodyAndAux bod aux
     where
         validity =
@@ -1595,6 +1606,15 @@ fromShelleyRegistrationCert = \case
     SL.DCertDeleg{}   -> Nothing
     SL.DCertGenesis{} -> Nothing
     SL.DCertMir{}     -> Nothing
+
+fromShelleyOtherCert
+    :: SL.DCert crypto
+    -> Maybe (W.NonWalletCertificate)
+fromShelleyOtherCert = \case
+    SL.DCertPool _ -> Nothing
+    SL.DCertDeleg{}   -> Nothing
+    SL.DCertGenesis{} -> Just W.GenesisCertificate
+    SL.DCertMir{}     -> Just W.MIRCertificate
 
 toWalletCoin :: HasCallStack => SL.Coin -> W.Coin
 toWalletCoin = W.Coin . unsafeCoinToWord64
