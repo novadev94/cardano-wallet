@@ -67,16 +67,16 @@ import Cardano.Wallet.Primitive.Types.RewardAccount
 import Cardano.Wallet.Primitive.Types.TokenBundle
     ( TokenBundle )
 import Cardano.Wallet.Primitive.Types.TokenBundle.Gen
-    ( genFixedSizeTokenBundle
-    , genTokenBundle
-    , genTokenBundleSmallRange
-    , shrinkTokenBundleSmallRange
-    )
+    ( genTokenBundle, genTokenBundleSmallRange, shrinkTokenBundleSmallRange )
 import Cardano.Wallet.Primitive.Types.Tx
     ( TokenBundleSizeAssessment (..)
     , TokenBundleSizeAssessor (..)
     , TxSize (..)
+    , txOutMaxCoin
+    , txOutMinCoin
     )
+import Cardano.Wallet.Primitive.Types.Tx.Gen
+    ( genTxOutTokenBundle )
 import Cardano.Wallet.Shelley.Compatibility
     ( CardanoBlock
     , StandardCrypto
@@ -411,7 +411,7 @@ prop_assessTokenBundleSize_enlarge b1' b2' =
     assess b1 == TokenBundleSizeExceedsLimit ==> conjoin
         [ assess (b1 `TokenBundle.add` b2)
             === TokenBundleSizeExceedsLimit
-        , assess (b1 `TokenBundle.setCoin` maxBound)
+        , assess (b1 `TokenBundle.setCoin` txOutMaxCoin)
             === TokenBundleSizeExceedsLimit
         ]
   where
@@ -432,7 +432,7 @@ prop_assessTokenBundleSize_shrink b1' b2' maxSize =
     assess b1 == TokenBundleSizeWithinLimit ==> conjoin
         [ assess (b1 `TokenBundle.difference` b2)
             === TokenBundleSizeWithinLimit
-        , assess (b1 `TokenBundle.setCoin` minBound)
+        , assess (b1 `TokenBundle.setCoin` txOutMinCoin)
             === TokenBundleSizeWithinLimit
         ]
   where
@@ -792,19 +792,19 @@ newtype VariableSize128 a = VariableSize128 { unVariableSize128 :: a}
     deriving (Eq, Show)
 
 instance Arbitrary (FixedSize32 TokenBundle) where
-    arbitrary = FixedSize32 <$> genFixedSizeTokenBundle 32
+    arbitrary = FixedSize32 <$> genTxOutTokenBundle 32
     -- No shrinking
 
 instance Arbitrary (FixedSize48 TokenBundle) where
-    arbitrary = FixedSize48 <$> genFixedSizeTokenBundle 48
+    arbitrary = FixedSize48 <$> genTxOutTokenBundle 48
     -- No shrinking
 
 instance Arbitrary (FixedSize64 TokenBundle) where
-    arbitrary = FixedSize64 <$> genFixedSizeTokenBundle 64
+    arbitrary = FixedSize64 <$> genTxOutTokenBundle 64
     -- No shrinking
 
 instance Arbitrary (FixedSize128 TokenBundle) where
-    arbitrary = FixedSize128 <$> genFixedSizeTokenBundle 128
+    arbitrary = FixedSize128 <$> genTxOutTokenBundle 128
     -- No shrinking
 
 instance Arbitrary (VariableSize16 TokenBundle) where
