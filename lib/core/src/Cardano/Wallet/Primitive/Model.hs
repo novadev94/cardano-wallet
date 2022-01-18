@@ -32,7 +32,7 @@
 module Cardano.Wallet.Primitive.Model
     (
     -- * Type
-      Wallet
+      Wallet (Wallet)
 
     -- * Construction & Modification
     , FilteredBlock (..)

@@ -47,3 +47,5 @@ hie.yaml
 
 ### Docs build
 /_build/
+
+.DS_Store
